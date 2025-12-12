@@ -1,0 +1,13 @@
+# Handle line endings automatically for text files
+* text=auto
+
+# VBA files should use CRLF (Windows)
+*.vba text eol=crlf
+*.bas text eol=crlf
+*.cls text eol=crlf
+*.frm text eol=crlf
+
+# Ensure Excel files are treated as binary
+*.xlsm binary
+*.xlsx binary
+*.xls binary
