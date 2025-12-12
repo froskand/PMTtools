@@ -89,7 +89,7 @@ Sub SyncTechnicalFileToData()
     Next i
     
     ' Report findings
-    If missingItems.count = 0 Then
+    If missingItems.Count = 0 Then
         MsgBox "All items from Technical File exist in Technical Data!" & vbCrLf & vbCrLf & _
                "Total items checked: " & (tfLastRow - 6), vbInformation, "Sync Complete"
         Exit Sub
@@ -98,7 +98,7 @@ Sub SyncTechnicalFileToData()
     ' Ask if user wants to copy missing items
     Dim response As VbMsgBoxResult
     Dim missingList As String
-    missingList = missingItems.count & " item(s) found in Technical File but missing in Technical Data:" & vbCrLf & vbCrLf
+    missingList = missingItems.Count & " item(s) found in Technical File but missing in Technical Data:" & vbCrLf & vbCrLf
     
     Dim item As Variant
     Dim count As Long
@@ -106,8 +106,8 @@ Sub SyncTechnicalFileToData()
     For Each item In missingItems
         count = count + 1
         missingList = missingList & "- " & item(1) & vbCrLf
-        If count >= 10 And missingItems.count > 10 Then
-            missingList = missingList & "... and " & (missingItems.count - 10) & " more" & vbCrLf
+        If count >= 10 And missingItems.Count > 10 Then
+            missingList = missingList & "... and " & (missingItems.Count - 10) & " more" & vbCrLf
             Exit For
         End If
     Next item
@@ -332,43 +332,79 @@ Sub VerifyTechnicalSheets()
         Next i
     End If
     
-    ' CHECK 3: Verify order is the same
-    Dim tfIndex As Long, tdIndex As Long
-    tfIndex = 7
-    tdIndex = 7
+    ' CHECK 3: Verify order is the same (only for items with Y in Technical Data)
+    ' Build list of items from Technical File in order
+    Dim tfItemsList As Collection
+    Set tfItemsList = New Collection
     
-    Dim orderErrors As Long
-    orderErrors = 0
-    
-    Do While tfIndex <= tfLastRow And tdIndex <= tdLastRow And orderErrors < 5
-        Dim tfItem As String, tdItem As String
-        tfItem = Trim(tfSheet.Cells(tfIndex, tfItemIDCol).Value)
-        tdItem = Trim(tdSheet.Cells(tdIndex, tdItemIDCol).Value)
-        
-        ' Skip empty rows
-        If tfItem = "" Then
-            tfIndex = tfIndex + 1
-        ElseIf tdItem = "" Then
-            tdIndex = tdIndex + 1
-        ElseIf tfItem <> tdItem Then
-            errors.Add "Order mismatch at TF row " & tfIndex & " / TD row " & tdIndex & _
-                      ": TF has '" & tfItem & "', TD has '" & tdItem & "'"
-            ' Highlight the mismatched row in Technical Data
-            If tdSheet.Rows(tdIndex).Interior.Color <> RGB(255, 200, 0) Then
-                tdSheet.Cells(tdIndex, tdItemIDCol).Interior.Color = RGB(255, 220, 150)  ' Light orange for order issues
-            End If
-            orderErrors = orderErrors + 1
-            issuesFound = issuesFound + 1
-            tfIndex = tfIndex + 1
-            tdIndex = tdIndex + 1
-        Else
-            tfIndex = tfIndex + 1
-            tdIndex = tdIndex + 1
+    For i = 7 To tfLastRow
+        itemID = Trim(tfSheet.Cells(i, tfItemIDCol).Value)
+        If itemID <> "" Then
+            On Error Resume Next
+            tfItemsList.Add itemID, CStr(itemID)
+            On Error GoTo ErrorHandler
         End If
-    Loop
+    Next i
+    
+    ' Build list of items from Technical Data with Y flag, in order
+    Dim tdItemsList As Collection
+    Set tdItemsList = New Collection
+    
+    If tdTechFileCol > 0 Then
+        For i = 7 To tdLastRow
+            itemID = Trim(tdSheet.Cells(i, tdItemIDCol).Value)
+            Dim ynFlag As String
+            ynFlag = UCase(Trim(tdSheet.Cells(i, tdTechFileCol).Value))
+            
+            If itemID <> "" And (ynFlag = "Y" Or ynFlag = "YES") Then
+                tdItemsList.Add Array(itemID, i), CStr(itemID)  ' Store item and row number
+            End If
+        Next i
+        
+        ' Compare the two lists for order
+        Dim tfListIndex As Long, tdListIndex As Long
+        Dim orderErrors As Long
+        orderErrors = 0
+        
+        tfListIndex = 1
+        tdListIndex = 1
+        
+        Do While tfListIndex <= tfItemsList.Count And tdListIndex <= tdItemsList.Count And orderErrors < 10
+            Dim tfItemInList As String
+            Dim tdItemInList As Variant
+            Dim tdItemID As String
+            Dim tdRowNum As Long
+            
+            tfItemInList = tfItemsList(tfListIndex)
+            tdItemInList = tdItemsList(tdListIndex)
+            tdItemID = tdItemInList(0)
+            tdRowNum = tdItemInList(1)
+            
+            If tfItemInList <> tdItemID Then
+                errors.Add "Order mismatch: TF position " & tfListIndex & " has '" & tfItemInList & _
+                          "', but TD position " & tdListIndex & " (row " & tdRowNum & ") has '" & tdItemID & "'"
+                ' Highlight the mismatched row in Technical Data
+                If tdSheet.Rows(tdRowNum).Interior.Color <> RGB(255, 200, 0) Then
+                    tdSheet.Cells(tdRowNum, tdItemIDCol).Interior.Color = RGB(255, 220, 150)  ' Light orange for order issues
+                End If
+                orderErrors = orderErrors + 1
+                issuesFound = issuesFound + 1
+            End If
+            
+            tfListIndex = tfListIndex + 1
+            tdListIndex = tdListIndex + 1
+        Loop
+        
+        ' Check if lists have different lengths
+        If tfItemsList.Count <> tdItemsList.Count Then
+            errors.Add "Order count mismatch: Technical File has " & tfItemsList.Count & _
+                      " items, but Technical Data has " & tdItemsList.Count & " items with 'Y' flag"
+            issuesFound = issuesFound + 1
+        End If
+    End If
     
     ' Report results
-    If errors.count = 0 Then
+    If errors.Count = 0 Then
         MsgBox "✓ VERIFICATION PASSED!" & vbCrLf & vbCrLf & _
                "Both sheets are properly synchronized:" & vbCrLf & _
                "- All items present in both sheets" & vbCrLf & _
@@ -376,15 +412,15 @@ Sub VerifyTechnicalSheets()
                "- All details match" & vbCrLf & vbCrLf & _
                "Items checked: " & (tfLastRow - 6), vbInformation, "Verification Complete"
     Else
-        errorMsg = "⚠ VERIFICATION FAILED - " & errors.count & " issue(s) found:" & vbCrLf & vbCrLf
+        errorMsg = "⚠ VERIFICATION FAILED - " & errors.Count & " issue(s) found:" & vbCrLf & vbCrLf
         
         errorCount = 0
-        For i = 1 To errors.count
+        For i = 1 To errors.Count
             errorCount = errorCount + 1
             errorMsg = errorMsg & errorCount & ". " & errors(i) & vbCrLf
             
-            If errorCount >= 15 And errors.count > 15 Then
-                errorMsg = errorMsg & vbCrLf & "... and " & (errors.count - 15) & " more issues"
+            If errorCount >= 15 And errors.Count > 15 Then
+                errorMsg = errorMsg & vbCrLf & "... and " & (errors.Count - 15) & " more issues"
                 Exit For
             End If
         Next i
@@ -452,7 +488,7 @@ Function FindColumn(ws As Worksheet, headerRow As Long, columnName As String) As
     Dim i As Long
     Dim lastCol As Long
     
-    lastCol = ws.Cells(headerRow, ws.Columns.count).End(xlToLeft).Column
+    lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column
     
     For i = 1 To lastCol
         If UCase(Trim(ws.Cells(headerRow, i).Value)) = UCase(Trim(columnName)) Then
