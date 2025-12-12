@@ -164,9 +164,10 @@ End Sub
 
 Sub VerifyTechnicalSheets()
     '==================================================================
-    ' MODULE 2: Comprehensive Verification
+    ' MODULE 2: Comprehensive Verification with Highlighting
     ' Checks that both sheets are properly synchronized
     ' Verifies order, presence, and matching details
+    ' Highlights mismatches and missing items in ORANGE
     '==================================================================
     
     Dim wb As Workbook
@@ -184,6 +185,7 @@ Sub VerifyTechnicalSheets()
     Dim errors As Collection
     Dim errorMsg As String
     Dim errorCount As Long
+    Dim issuesFound As Long
     
     On Error GoTo ErrorHandler
     
@@ -225,20 +227,32 @@ Sub VerifyTechnicalSheets()
         End If
     Next i
     
+    ' Clear previous highlighting in Technical Data (rows 7 onwards)
+    If tdLastRow >= 7 Then
+        tdSheet.Rows("7:" & tdLastRow).Interior.ColorIndex = xlNone
+    End If
+    
+    issuesFound = 0
+    
     ' CHECK 1: All items in Technical File must be in Technical Data
     For i = 7 To tfLastRow
         itemID = Trim(tfSheet.Cells(i, tfItemIDCol).Value)
         If itemID <> "" Then
             Dim foundInTD As Boolean
+            Dim tdRowFound As Long
             foundInTD = False
+            tdRowFound = 0
             
             For j = 7 To tdLastRow
                 If Trim(tdSheet.Cells(j, tdItemIDCol).Value) = itemID Then
                     foundInTD = True
+                    tdRowFound = j
                     
-                    ' Verify matching details
+                    ' Verify matching details and highlight mismatches
                     Dim tfAbbr As String, tfName As String, tfResp As String
                     Dim tdAbbr As String, tdName As String, tdResp As String
+                    Dim hasMismatch As Boolean
+                    hasMismatch = False
                     
                     tfAbbr = Trim(tfSheet.Cells(i, tfAbbrCol).Value)
                     tdAbbr = Trim(tdSheet.Cells(j, tdAbbrCol).Value)
@@ -249,16 +263,33 @@ Sub VerifyTechnicalSheets()
                     tfResp = Trim(tfSheet.Cells(i, tfRespCol).Value)
                     tdResp = Trim(tdSheet.Cells(j, tdRespCol).Value)
                     
+                    ' Check Abbreviation mismatch
                     If tfAbbrCol > 0 And tdAbbrCol > 0 And tfAbbr <> tdAbbr Then
-                        errors.Add "Item " & itemID & ": Abbreviation mismatch (TF: '" & tfAbbr & "' vs TD: '" & tdAbbr & "')"
+                        errors.Add "Item " & itemID & " (TD row " & j & "): Abbreviation mismatch (TF: '" & tfAbbr & "' vs TD: '" & tdAbbr & "')"
+                        tdSheet.Cells(j, tdAbbrCol).Interior.Color = RGB(255, 200, 0)  ' Orange
+                        hasMismatch = True
+                        issuesFound = issuesFound + 1
                     End If
                     
+                    ' Check Name mismatch
                     If tfNameCol > 0 And tdNameCol > 0 And tfName <> tdName Then
-                        errors.Add "Item " & itemID & ": Name mismatch (TF: '" & tfName & "' vs TD: '" & tdName & "')"
+                        errors.Add "Item " & itemID & " (TD row " & j & "): Name mismatch (TF: '" & tfName & "' vs TD: '" & tdName & "')"
+                        tdSheet.Cells(j, tdNameCol).Interior.Color = RGB(255, 200, 0)  ' Orange
+                        hasMismatch = True
+                        issuesFound = issuesFound + 1
                     End If
                     
+                    ' Check Responsible mismatch
                     If tfRespCol > 0 And tdRespCol > 0 And tfResp <> tdResp Then
-                        errors.Add "Item " & itemID & ": Responsible mismatch (TF: '" & tfResp & "' vs TD: '" & tdResp & "')"
+                        errors.Add "Item " & itemID & " (TD row " & j & "): Responsible mismatch (TF: '" & tfResp & "' vs TD: '" & tdResp & "')"
+                        tdSheet.Cells(j, tdRespCol).Interior.Color = RGB(255, 200, 0)  ' Orange
+                        hasMismatch = True
+                        issuesFound = issuesFound + 1
+                    End If
+                    
+                    ' Highlight Item ID if there are any mismatches in this row
+                    If hasMismatch Then
+                        tdSheet.Cells(j, tdItemIDCol).Interior.Color = RGB(255, 200, 0)  ' Orange
                     End If
                     
                     Exit For
@@ -266,7 +297,9 @@ Sub VerifyTechnicalSheets()
             Next j
             
             If Not foundInTD Then
-                errors.Add "Item " & itemID & " (row " & i & "): In Technical File but MISSING in Technical Data"
+                errors.Add "Item " & itemID & " (TF row " & i & "): In Technical File but MISSING in Technical Data"
+                issuesFound = issuesFound + 1
+                ' Can't highlight in TD as it doesn't exist there
             End If
         End If
     Next i
@@ -290,7 +323,10 @@ Sub VerifyTechnicalSheets()
                 Next j
                 
                 If Not foundInTF Then
-                    errors.Add "Item " & itemID & " (row " & i & "): Marked 'Y' in Technical Data but MISSING in Technical File"
+                    errors.Add "Item " & itemID & " (TD row " & i & "): Marked 'Y' in Technical Data but MISSING in Technical File"
+                    ' Highlight entire row in orange
+                    tdSheet.Rows(i).Interior.Color = RGB(255, 200, 0)  ' Orange
+                    issuesFound = issuesFound + 1
                 End If
             End If
         Next i
@@ -317,7 +353,12 @@ Sub VerifyTechnicalSheets()
         ElseIf tfItem <> tdItem Then
             errors.Add "Order mismatch at TF row " & tfIndex & " / TD row " & tdIndex & _
                       ": TF has '" & tfItem & "', TD has '" & tdItem & "'"
+            ' Highlight the mismatched row in Technical Data
+            If tdSheet.Rows(tdIndex).Interior.Color <> RGB(255, 200, 0) Then
+                tdSheet.Cells(tdIndex, tdItemIDCol).Interior.Color = RGB(255, 220, 150)  ' Light orange for order issues
+            End If
             orderErrors = orderErrors + 1
+            issuesFound = issuesFound + 1
             tfIndex = tfIndex + 1
             tdIndex = tdIndex + 1
         Else
@@ -328,14 +369,14 @@ Sub VerifyTechnicalSheets()
     
     ' Report results
     If errors.count = 0 Then
-        MsgBox "? VERIFICATION PASSED!" & vbCrLf & vbCrLf & _
+        MsgBox "✓ VERIFICATION PASSED!" & vbCrLf & vbCrLf & _
                "Both sheets are properly synchronized:" & vbCrLf & _
                "- All items present in both sheets" & vbCrLf & _
                "- Order matches" & vbCrLf & _
                "- All details match" & vbCrLf & vbCrLf & _
                "Items checked: " & (tfLastRow - 6), vbInformation, "Verification Complete"
     Else
-        errorMsg = "? VERIFICATION FAILED - " & errors.count & " issue(s) found:" & vbCrLf & vbCrLf
+        errorMsg = "⚠ VERIFICATION FAILED - " & errors.count & " issue(s) found:" & vbCrLf & vbCrLf
         
         errorCount = 0
         For i = 1 To errors.count
@@ -348,7 +389,51 @@ Sub VerifyTechnicalSheets()
             End If
         Next i
         
+        errorMsg = errorMsg & vbCrLf & vbCrLf & _
+                   "Mismatches and missing items are highlighted in ORANGE in Technical Data sheet."
+        
         MsgBox errorMsg, vbExclamation, "Verification Issues Found"
+    End If
+    
+    Exit Sub
+    
+ErrorHandler:
+    MsgBox "Error: " & Err.Description, vbCritical, "Error"
+End Sub
+
+
+Sub ClearTechnicalDataHighlighting()
+    '==================================================================
+    ' HELPER: Clear all highlighting from Technical Data
+    '==================================================================
+    Dim wb As Workbook
+    Dim tdSheet As Worksheet
+    Dim lastRow As Long
+    
+    On Error GoTo ErrorHandler
+    
+    Set wb = ThisWorkbook
+    Set tdSheet = wb.Worksheets("Technical Data")
+    
+    ' Find last row
+    lastRow = 7
+    Dim tdItemIDCol As Long
+    tdItemIDCol = FindColumn(tdSheet, 3, "ITEM ID")
+    
+    If tdItemIDCol > 0 Then
+        For i = 7 To 1000
+            If Trim(tdSheet.Cells(i, tdItemIDCol).Value) <> "" Then
+                lastRow = i
+            End If
+        Next i
+    End If
+    
+    ' Clear highlighting
+    If lastRow >= 7 Then
+        tdSheet.Rows("7:" & lastRow).Interior.ColorIndex = xlNone
+        MsgBox "Highlighting cleared from Technical Data sheet.", vbInformation, "Clear Complete"
+    Else
+        MsgBox "No data found to clear.", vbInformation
     End If
     
     Exit Sub
@@ -387,13 +472,26 @@ Function FindInsertPosition(tfSheet As Worksheet, tdSheet As Worksheet, _
     Dim tfIndex As Long
     Dim tdLastRow As Long
     
-    tdLastRow = tdSheet.Cells(tdSheet.Rows.count, tdItemIDCol).End(xlUp).Row
+    tdLastRow = 7
+    For i = 7 To 1000
+        If Trim(tdSheet.Cells(i, tdItemIDCol).Value) <> "" Then
+            tdLastRow = i
+        End If
+    Next i
     
     ' Find the next item in Technical File after tfRow
     Dim nextItemID As String
     nextItemID = ""
     
-    For i = tfRow + 1 To tfSheet.Cells(tfSheet.Rows.count, tfItemIDCol).End(xlUp).Row
+    Dim tfLastRow As Long
+    tfLastRow = 7
+    For i = 7 To 1000
+        If Trim(tfSheet.Cells(i, tfItemIDCol).Value) <> "" Then
+            tfLastRow = i
+        End If
+    Next i
+    
+    For i = tfRow + 1 To tfLastRow
         nextItemID = Trim(tfSheet.Cells(i, tfItemIDCol).Value)
         If nextItemID <> "" Then Exit For
     Next i
@@ -415,4 +513,3 @@ Function FindInsertPosition(tfSheet As Worksheet, tdSheet As Worksheet, _
     ' If next item not found in TD, insert at end
     FindInsertPosition = tdLastRow + 1
 End Function
-
