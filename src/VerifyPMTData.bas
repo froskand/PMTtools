@@ -166,7 +166,7 @@ Sub VerifyTechnicalSheets()
     '==================================================================
     ' MODULE 2: Comprehensive Verification with Highlighting
     ' Checks that both sheets are properly synchronized
-    ' Verifies order, presence, and matching details
+    ' Verifies order, presence, matching details, and baseline columns
     ' Highlights mismatches and missing items in ORANGE
     '==================================================================
     
@@ -187,12 +187,20 @@ Sub VerifyTechnicalSheets()
     Dim errorCount As Long
     Dim issuesFound As Long
     
+    ' Baseline column variables
+    Dim baselineColumns As Collection
+    Dim baselineID As String
+    Dim col As Long
+    Dim tfValue As String, tdValue As String
+    Dim tfCol As Long, tdCol As Long
+    
     On Error GoTo ErrorHandler
     
     Set wb = ThisWorkbook
     Set tfSheet = wb.Worksheets("Technical File")
     Set tdSheet = wb.Worksheets("Technical Data")
     Set errors = New Collection
+    Set baselineColumns = New Collection
     
     ' Find columns in Technical File (row 3)
     tfItemIDCol = FindColumn(tfSheet, 3, "ITEM ID")
@@ -299,7 +307,6 @@ Sub VerifyTechnicalSheets()
             If Not foundInTD Then
                 errors.Add "Item " & itemID & " (TF row " & i & "): In Technical File but MISSING in Technical Data"
                 issuesFound = issuesFound + 1
-                ' Can't highlight in TD as it doesn't exist there
             End If
         End If
     Next i
@@ -403,121 +410,7 @@ Sub VerifyTechnicalSheets()
         End If
     End If
     
-    ' Report results
-    If errors.Count = 0 Then
-        MsgBox "✓ VERIFICATION PASSED!" & vbCrLf & vbCrLf & _
-               "Both sheets are properly synchronized:" & vbCrLf & _
-               "- All items present in both sheets" & vbCrLf & _
-               "- Order matches" & vbCrLf & _
-               "- All details match" & vbCrLf & vbCrLf & _
-               "Items checked: " & (tfLastRow - 6), vbInformation, "Verification Complete"
-    Else
-        errorMsg = "⚠ VERIFICATION FAILED - " & errors.Count & " issue(s) found:" & vbCrLf & vbCrLf
-        
-        errorCount = 0
-        For i = 1 To errors.Count
-            errorCount = errorCount + 1
-            errorMsg = errorMsg & errorCount & ". " & errors(i) & vbCrLf
-            
-            If errorCount >= 15 And errors.Count > 15 Then
-                errorMsg = errorMsg & vbCrLf & "... and " & (errors.Count - 15) & " more issues"
-                Exit For
-            End If
-        Next i
-        
-        errorMsg = errorMsg & vbCrLf & vbCrLf & _
-                   "Mismatches and missing items are highlighted in ORANGE in Technical Data sheet."
-        
-        MsgBox errorMsg, vbExclamation, "Verification Issues Found"
-    End If
-    
-    Exit Sub
-    
-ErrorHandler:
-    MsgBox "Error: " & Err.Description, vbCritical, "Error"
-End Sub
-
-
-Sub ClearTechnicalDataHighlighting()
-    '==================================================================
-    ' HELPER: Clear all highlighting from Technical Data
-    '==================================================================
-    Dim wb As Workbook
-    Dim tdSheet As Worksheet
-    Dim lastRow As Long
-    
-    On Error GoTo ErrorHandler
-    
-    Set wb = ThisWorkbook
-    Set tdSheet = wb.Worksheets("Technical Data")
-    
-    ' Find last row
-    lastRow = 7
-    Dim tdItemIDCol As Long
-    tdItemIDCol = FindColumn(tdSheet, 3, "ITEM ID")
-    
-    If tdItemIDCol > 0 Then
-        For i = 7 To 1000
-            If Trim(tdSheet.Cells(i, tdItemIDCol).Value) <> "" Then
-                lastRow = i
-            End If
-        Next i
-    End If
-    
-    ' Clear highlighting
-    If lastRow >= 7 Then
-        tdSheet.Rows("7:" & lastRow).Interior.ColorIndex = xlNone
-        MsgBox "Highlighting cleared from Technical Data sheet.", vbInformation, "Clear Complete"
-    Else
-        MsgBox "No data found to clear.", vbInformation
-    End If
-    
-    Exit Sub
-    
-ErrorHandler:
-    MsgBox "Error: " & Err.Description, vbCritical, "Error"
-End Sub
-
-Sub VerifyBaselineColumns()
-    '==================================================================
-    ' MODULE 3: Verify Baseline Columns Match
-    ' Checks that items marked with X in baseline columns match
-    ' between Technical File and Technical Data
-    '==================================================================
-    
-    Dim wb As Workbook
-    Dim tfSheet As Worksheet
-    Dim tdSheet As Worksheet
-    
-    Dim tfItemIDCol As Long, tdItemIDCol As Long
-    Dim tfLastRow As Long, tdLastRow As Long
-    Dim i As Long, j As Long, col As Long
-    
-    Dim baselineColumns As Collection
-    Dim errors As Collection
-    Dim baselineID As String
-    Dim itemID As String
-    Dim tfValue As String, tdValue As String
-    Dim tfCol As Long, tdCol As Long
-    Dim issuesFound As Long
-    
-    On Error GoTo ErrorHandler
-    
-    Set wb = ThisWorkbook
-    Set tfSheet = wb.Worksheets("Technical File")
-    Set tdSheet = wb.Worksheets("Technical Data")
-    Set baselineColumns = New Collection
-    Set errors = New Collection
-    
-    ' Find Item ID columns
-    tfItemIDCol = FindColumn(tfSheet, 3, "ITEM ID")
-    tdItemIDCol = FindColumn(tdSheet, 3, "ITEM ID")
-    
-    If tfItemIDCol = 0 Or tdItemIDCol = 0 Then
-        MsgBox "Item ID column not found in one or both sheets.", vbExclamation
-        Exit Sub
-    End If
-    
+    ' CHECK 4: Verify baseline columns (BL####) match
     ' Find baseline columns in Technical File (row 4 contains BL####)
     Dim lastCol As Long
     lastCol = tfSheet.Cells(4, tfSheet.Columns.Count).End(xlToLeft).Column
@@ -547,26 +440,6 @@ Sub VerifyBaselineColumns()
             End If
         End If
     Next col
-    
-    If baselineColumns.Count = 0 Then
-        MsgBox "No baseline columns (BL####) found in row 4.", vbInformation
-        Exit Sub
-    End If
-    
-    ' Get last rows
-    tfLastRow = 7
-    For i = 7 To 1000
-        If Trim(tfSheet.Cells(i, tfItemIDCol).Value) <> "" Then
-            tfLastRow = i
-        End If
-    Next i
-    
-    tdLastRow = 7
-    For i = 7 To 1000
-        If Trim(tdSheet.Cells(i, tdItemIDCol).Value) <> "" Then
-            tdLastRow = i
-        End If
-    Next i
     
     ' Compare X marks for each baseline column
     Dim blItem As Variant
@@ -611,26 +484,37 @@ Sub VerifyBaselineColumns()
     
     ' Report results
     If errors.Count = 0 Then
-        MsgBox "✓ BASELINE VERIFICATION PASSED!" & vbCrLf & vbCrLf & _
-               "All baseline columns match between sheets." & vbCrLf & vbCrLf & _
-               "Baselines checked: " & baselineColumns.Count & vbCrLf & _
-               "Items checked: " & (tfLastRow - 6), _
-               vbInformation, "Verification Complete"
-    Else
-        Dim errorMsg As String
-        errorMsg = "⚠ BASELINE VERIFICATION FAILED - " & errors.Count & " issue(s) found:" & vbCrLf & vbCrLf
+        Dim successMsg As String
+        successMsg = "? VERIFICATION PASSED!" & vbCrLf & vbCrLf & _
+               "Both sheets are properly synchronized:" & vbCrLf & _
+               "- All items present in both sheets" & vbCrLf & _
+               "- Order matches" & vbCrLf & _
+               "- All details match" & vbCrLf
         
-        Dim errorCount As Long
+        If baselineColumns.Count > 0 Then
+            successMsg = successMsg & "- All baseline columns match (" & baselineColumns.Count & " baselines)" & vbCrLf
+        End If
+        
+        successMsg = successMsg & vbCrLf & "Items checked: " & (tfLastRow - 6)
+        
+        MsgBox successMsg, vbInformation, "Verification Complete"
+    Else
+        errorMsg = "? VERIFICATION FAILED - " & errors.Count & " issue(s) found:" & vbCrLf & vbCrLf
+        
+        errorCount = 0
         For i = 1 To errors.Count
             errorCount = errorCount + 1
             errorMsg = errorMsg & errorCount & ". " & errors(i) & vbCrLf
+            
             If errorCount >= 15 And errors.Count > 15 Then
                 errorMsg = errorMsg & vbCrLf & "... and " & (errors.Count - 15) & " more issues"
                 Exit For
             End If
         Next i
         
-        errorMsg = errorMsg & vbCrLf & "Mismatches highlighted in ORANGE in Technical Data."
+        errorMsg = errorMsg & vbCrLf & vbCrLf & _
+                   "Mismatches and missing items are highlighted in ORANGE in Technical Data sheet."
+        
         MsgBox errorMsg, vbExclamation, "Verification Issues Found"
     End If
     
@@ -640,6 +524,48 @@ ErrorHandler:
     MsgBox "Error: " & Err.Description, vbCritical, "Error"
 End Sub
 
+
+
+
+Sub ClearTechnicalDataHighlighting()
+    '==================================================================
+    ' HELPER: Clear all highlighting from Technical Data
+    '==================================================================
+    Dim wb As Workbook
+    Dim tdSheet As Worksheet
+    Dim lastRow As Long
+    
+    On Error GoTo ErrorHandler
+    
+    Set wb = ThisWorkbook
+    Set tdSheet = wb.Worksheets("Technical Data")
+    
+    ' Find last row
+    lastRow = 7
+    Dim tdItemIDCol As Long
+    tdItemIDCol = FindColumn(tdSheet, 3, "ITEM ID")
+    
+    If tdItemIDCol > 0 Then
+        For i = 7 To 1000
+            If Trim(tdSheet.Cells(i, tdItemIDCol).Value) <> "" Then
+                lastRow = i
+            End If
+        Next i
+    End If
+    
+    ' Clear highlighting
+    If lastRow >= 7 Then
+        tdSheet.Rows("7:" & lastRow).Interior.ColorIndex = xlNone
+        MsgBox "Highlighting cleared from Technical Data sheet.", vbInformation, "Clear Complete"
+    Else
+        MsgBox "No data found to clear.", vbInformation
+    End If
+    
+    Exit Sub
+    
+ErrorHandler:
+    MsgBox "Error: " & Err.Description, vbCritical, "Error"
+End Sub
 
 '==================================================================
 ' HELPER FUNCTIONS
