@@ -1,4 +1,4 @@
-Attribute VB_Name = "VerifyPMTData"
+Attribute VB_Name = "TechDataAndFileSyncModule"
 Sub SyncTechnicalFileToData()
     '==================================================================
     ' MODULE 1: Sync Technical File to Technical Data
@@ -101,12 +101,12 @@ Sub SyncTechnicalFileToData()
     missingList = missingItems.Count & " item(s) found in Technical File but missing in Technical Data:" & vbCrLf & vbCrLf
     
     Dim item As Variant
-    Dim count As Long
-    count = 0
+    Dim Count As Long
+    Count = 0
     For Each item In missingItems
-        count = count + 1
+        Count = Count + 1
         missingList = missingList & "- " & item(1) & vbCrLf
-        If count >= 10 And missingItems.Count > 10 Then
+        If Count >= 10 And missingItems.Count > 10 Then
             missingList = missingList & "... and " & (missingItems.Count - 10) & " more" & vbCrLf
             Exit For
         End If
