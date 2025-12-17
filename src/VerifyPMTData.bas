@@ -410,41 +410,120 @@ Sub VerifyTechnicalSheets()
         End If
     End If
     
-    ' CHECK 4: Verify baseline columns (BL####) match
-    ' Find baseline columns in Technical File (row 4 contains BL####)
-    Dim lastCol As Long
-    lastCol = tfSheet.Cells(4, tfSheet.Columns.Count).End(xlToLeft).Column
+
+' CHECK 4: Verify all baseline columns exist in both sheets
+    ' Find all baseline columns in Technical File
+    Dim tfBaselineColumns As Collection
+    Set tfBaselineColumns = New Collection
     
+    lastCol = tfSheet.Cells(4, tfSheet.Columns.Count).End(xlToLeft).Column
     For col = 1 To lastCol
         baselineID = Trim(UCase(tfSheet.Cells(4, col).Value))
         ' Check if it matches pattern BL#### where #### is 0001-9999
         If Len(baselineID) = 6 And Left(baselineID, 2) = "BL" And IsNumeric(Mid(baselineID, 3, 4)) Then
-            ' Find matching column in Technical Data
-            Dim tdMatchCol As Long
-            tdMatchCol = 0
-            For j = 1 To tdSheet.Cells(4, tdSheet.Columns.Count).End(xlToLeft).Column
-                If Trim(UCase(tdSheet.Cells(4, j).Value)) = baselineID Then
-                    tdMatchCol = j
-                    Exit For
-                End If
-            Next j
-            
-            If tdMatchCol > 0 Then
-                ' Store: baselineID, TF column, TD column
-                On Error Resume Next
-                baselineColumns.Add Array(baselineID, col, tdMatchCol), baselineID
-                On Error GoTo ErrorHandler
-            Else
-                errors.Add "Baseline " & baselineID & " found in Technical File but MISSING in Technical Data"
-                issuesFound = issuesFound + 1
-            End If
+            On Error Resume Next
+            tfBaselineColumns.Add baselineID, baselineID
+            On Error GoTo ErrorHandler
         End If
     Next col
     
+    ' Find all baseline columns in Technical Data
+    Dim tdBaselineColumns As Collection
+    Set tdBaselineColumns = New Collection
+    
+    lastCol = tdSheet.Cells(4, tdSheet.Columns.Count).End(xlToLeft).Column
+    For col = 1 To lastCol
+        baselineID = Trim(UCase(tdSheet.Cells(4, col).Value))
+        If Len(baselineID) = 6 And Left(baselineID, 2) = "BL" And IsNumeric(Mid(baselineID, 3, 4)) Then
+            On Error Resume Next
+            tdBaselineColumns.Add baselineID, baselineID
+            On Error GoTo ErrorHandler
+        End If
+    Next col
+    
+    ' Check for baselines in TF but not in TD
+    Dim blID As Variant
+    Dim blCheck As Variant
+    
+    For Each blID In tfBaselineColumns
+        Dim foundInTDBaselines As Boolean
+        foundInTDBaselines = False
+        
+        For Each blCheck In tdBaselineColumns
+            If blCheck = blID Then
+                foundInTDBaselines = True
+                Exit For
+            End If
+        Next blCheck  ' CHANGED
+        
+        If Not foundInTDBaselines Then
+            errors.Add "Baseline " & blID & " exists in Technical File but MISSING in Technical Data"
+            issuesFound = issuesFound + 1
+        End If
+    Next blID
+    
+    ' Check for baselines in TD but not in TF
+    For Each blID In tdBaselineColumns
+        Dim foundInTFBaselines As Boolean
+        foundInTFBaselines = False
+        
+        For Each blCheck In tfBaselineColumns
+            If blCheck = blID Then
+                foundInTFBaselines = True
+                Exit For
+            End If
+        Next blCheck
+        
+        If Not foundInTFBaselines Then
+            errors.Add "Baseline " & blID & " exists in Technical Data but MISSING in Technical File"
+            issuesFound = issuesFound + 1
+        End If
+    Next blID
+    
+ ' CHECK 5: Verify baseline columns (BL####) X marks match
+    ' Build collection of baseline columns present in BOTH sheets
+    For Each blID In tfBaselineColumns
+        ' Only add if it exists in both sheets
+        foundInTDBaselines = False
+        For Each blCheck In tdBaselineColumns
+            If blCheck = blID Then
+                foundInTDBaselines = True
+                Exit For
+            End If
+        Next blCheck
+        
+        If foundInTDBaselines Then
+            ' Find columns
+            tfCol = 0
+            tdCol = 0
+            
+            ' Find in TF
+            For col = 1 To tfSheet.Cells(4, tfSheet.Columns.Count).End(xlToLeft).Column
+                If Trim(UCase(tfSheet.Cells(4, col).Value)) = blID Then
+                    tfCol = col
+                    Exit For
+                End If
+            Next col
+            
+            ' Find in TD
+            For col = 1 To tdSheet.Cells(4, tdSheet.Columns.Count).End(xlToLeft).Column
+                If Trim(UCase(tdSheet.Cells(4, col).Value)) = blID Then
+                    tdCol = col
+                    Exit For
+                End If
+            Next col
+            
+            If tfCol > 0 And tdCol > 0 Then
+                On Error Resume Next
+                baselineColumns.Add Array(blID, tfCol, tdCol), CStr(blID)
+                On Error GoTo ErrorHandler
+            End If
+        End If
+    Next blID
+    
     ' Compare X marks for each baseline column
-    Dim blItem As Variant
     For Each blItem In baselineColumns
-        baselineID = blItem(0)
+        blCheck = blItem(0)
         tfCol = blItem(1)
         tdCol = blItem(2)
         
@@ -455,7 +534,6 @@ Sub VerifyTechnicalSheets()
                 tfValue = UCase(Trim(tfSheet.Cells(i, tfCol).Value))
                 
                 ' Find matching item in Technical Data
-                Dim tdRow As Long
                 tdRow = 0
                 For j = 7 To tdLastRow
                     If Trim(tdSheet.Cells(j, tdItemIDCol).Value) = itemID Then
@@ -469,11 +547,11 @@ Sub VerifyTechnicalSheets()
                     
                     ' Compare X marks
                     If tfValue = "X" And tdValue <> "X" Then
-                        errors.Add baselineID & " - Item " & itemID & ": Marked X in TF but NOT in TD"
+                        errors.Add blCheck & " - Item " & itemID & ": Marked X in TF but NOT in TD"
                         tdSheet.Cells(tdRow, tdCol).Interior.Color = RGB(255, 200, 0)  ' Orange
                         issuesFound = issuesFound + 1
                     ElseIf tfValue <> "X" And tdValue = "X" Then
-                        errors.Add baselineID & " - Item " & itemID & ": Marked X in TD but NOT in TF"
+                        errors.Add blCheck & " - Item " & itemID & ": Marked X in TD but NOT in TF"
                         tdSheet.Cells(tdRow, tdCol).Interior.Color = RGB(255, 200, 0)  ' Orange
                         issuesFound = issuesFound + 1
                     End If
@@ -482,17 +560,20 @@ Sub VerifyTechnicalSheets()
         Next i
     Next blItem
     
-    ' Report results
+ ' Report results
     If errors.Count = 0 Then
         Dim successMsg As String
-        successMsg = "? VERIFICATION PASSED!" & vbCrLf & vbCrLf & _
+        successMsg = "✓ VERIFICATION PASSED!" & vbCrLf & vbCrLf & _
                "Both sheets are properly synchronized:" & vbCrLf & _
                "- All items present in both sheets" & vbCrLf & _
                "- Order matches" & vbCrLf & _
                "- All details match" & vbCrLf
         
-        If baselineColumns.Count > 0 Then
-            successMsg = successMsg & "- All baseline columns match (" & baselineColumns.Count & " baselines)" & vbCrLf
+        If tfBaselineColumns.Count > 0 Or tdBaselineColumns.Count > 0 Then
+            successMsg = successMsg & "- All baseline columns present in both sheets (" & tfBaselineColumns.Count & " baselines)" & vbCrLf
+            If baselineColumns.Count > 0 Then
+                successMsg = successMsg & "- All baseline X marks match" & vbCrLf
+            End If
         End If
         
         successMsg = successMsg & vbCrLf & "Items checked: " & (tfLastRow - 6)
@@ -500,21 +581,21 @@ Sub VerifyTechnicalSheets()
         MsgBox successMsg, vbInformation, "Verification Complete"
     Else
         errorMsg = "? VERIFICATION FAILED - " & errors.Count & " issue(s) found:" & vbCrLf & vbCrLf
-        
+
         errorCount = 0
         For i = 1 To errors.Count
             errorCount = errorCount + 1
             errorMsg = errorMsg & errorCount & ". " & errors(i) & vbCrLf
-            
+
             If errorCount >= 15 And errors.Count > 15 Then
                 errorMsg = errorMsg & vbCrLf & "... and " & (errors.Count - 15) & " more issues"
                 Exit For
             End If
         Next i
-        
+
         errorMsg = errorMsg & vbCrLf & vbCrLf & _
-                   "Mismatches and missing items are highlighted in ORANGE in Technical Data sheet."
-        
+            "Mismatches and missing items are highlighted in ORANGE in Technical Data sheet."
+
         MsgBox errorMsg, vbExclamation, "Verification Issues Found"
     End If
     

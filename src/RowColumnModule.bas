@@ -104,10 +104,10 @@ Sub InsertMatrixRowAndColumn()
     End If
 
     matrixSize = Application.WorksheetFunction.Max( _
-        matrixEnd.Row - matrixStart.Row + 1, _
+        matrixEnd.row - matrixStart.row + 1, _
         matrixEnd.Column - matrixStart.Column + 1)
     ' Find where to insert
-    insertIndex = Selection.Row - matrixStart.Row + 1
+    insertIndex = Selection.row - matrixStart.row + 1
     If insertIndex < 1 Or insertIndex > matrixSize + 1 Then
         MsgBox "Please right-click a row within the matrix.", vbExclamation
         Exit Sub
@@ -131,13 +131,13 @@ Sub InsertMatrixRowAndColumn()
     ' Set automatic values:
     ' (1) Type (referenced) for the column
     ' IMPORTANT: IT looks for a fixed value of 4 from the Identification column.
-    identValue = "=" & Cells(matrixStart.Row + insertIndex - 1, identStart.Column + 4).Address(External:=True)
-    relRowIndex = relStart.Row + 1
+    identValue = "=" & Cells(matrixStart.row + insertIndex - 1, identStart.Column + 4).Address(External:=True)
+    relRowIndex = relStart.row + 1
     Set targetCell = Cells(relRowIndex, matrixStart.Column + insertIndex - 1)
     targetCell.Value = identValue
-    ' (2) Date on first column
-    Set targetCell = Cells(matrixStart.Row + insertIndex - 1, identStart.Column)
-    targetCell.Value = Format(Now, "dd/mm/yyyy")
+    ' (2) Date on first column + 1
+    Set targetCell = Cells(matrixStart.row + insertIndex - 1, identStart.Column + 1)
+    targetCell.Value = Format(Now, "yyyy.mm.dd")
 
     ' Select inserted row
     matrixStart.Offset(insertIndex - 1, 0).Select
