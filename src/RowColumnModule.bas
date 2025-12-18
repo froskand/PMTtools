@@ -135,8 +135,8 @@ Sub InsertMatrixRowAndColumn()
     relRowIndex = relStart.row + 1
     Set targetCell = Cells(relRowIndex, matrixStart.Column + insertIndex - 1)
     targetCell.Value = identValue
-    ' (2) Date on first column + 1
-    Set targetCell = Cells(matrixStart.row + insertIndex - 1, identStart.Column + 1)
+    ' (2) Date on first column
+    Set targetCell = Cells(matrixStart.row + insertIndex - 1, identStart.Column)
     targetCell.Value = Format(Now, "yyyy.mm.dd")
 
     ' Select inserted row
