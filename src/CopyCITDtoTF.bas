@@ -65,12 +65,13 @@ End Sub
 
 ' Function CopyRowToTechnicalFile()
 ' Purpose: Copy selected row from Technical Data sheet to Technical File sheet
-'          Inserts row in correct position based on Item ID ordering
+'          Inserts row in correct position based on Technical Data ordering
+'          (after the previous item with Y flag, before the next item with Y flag)
 ' Key actions:
 ' - Validate source sheet and row
 ' - Find columns in both sheets
 ' - Check for duplicate Item ID in Technical File
-' - Determine insert position based on Item ID
+' - Determine insert position based on Technical Data order (items with Y flag)
 ' - Insert row and column using InsertMatrixRowAndColumn
 ' - Copy data from source to target
 ' Code flow Summary:
@@ -78,8 +79,10 @@ End Sub
 ' - Get selected row and validate
 ' - Find column indices in both sheets
 ' - Extract data from source row
-' - Check if Item ID already exists in Technical File (NEW)
-' - Find insert position in Technical File based on Item ID
+' - Check if Item ID already exists in Technical File
+' - Find next item in Technical Data with Y flag
+' - Find where that next item is in Technical File
+' - Insert before that position (or at end if no next item)
 ' - Call InsertMatrixRowAndColumn to insert at correct position
 ' - Copy data to new row
 
@@ -250,19 +253,56 @@ Sub CopyRowToTechnicalFile()
     ' End of duplicate check
     ' ========================================
     
-    ' Find insert position in Technical File based on Item ID ordering
-    insertPosition = lastRow + 1 ' Default to end
+    ' ========================================
+    ' NEW: Find insert position based on Technical Data order
+    ' Find the next item in Technical Data (after current row) that has Y flag
+    ' Then find where that item is in Technical File
+    ' ========================================
+    insertPosition = lastRow + 1 ' Default to end if no next item found
     
-    For i = 7 To lastRow ' Assuming row 1-6 is header
-        Dim targetItemID As String
-        targetItemID = CStr(targetSheet.Cells(i, tgtItemIDCol).Value)
+    Dim sourceLastRow As Long
+    Dim nextItemWithY As String
+    Dim nextItemFound As Boolean
+    
+    ' Find last row in source sheet
+    sourceLastRow = sourceSheet.Cells(sourceSheet.Rows.Count, srcItemIDCol).End(xlUp).row
+    
+    nextItemFound = False
+    nextItemWithY = ""
+    
+    ' Look for the next item in Technical Data (after current row) that has Y flag
+    For i = sourceRow + 1 To sourceLastRow
+        Dim nextRowItemID As String
+        Dim nextRowYNFlag As String
         
-        ' Insert before the first Item ID that's greater than source Item ID
-        If StrComp(sourceItemID, targetItemID, vbTextCompare) < 0 Then
-            insertPosition = i
+        nextRowItemID = Trim(CStr(sourceSheet.Cells(i, srcItemIDCol).Value))
+        nextRowYNFlag = Trim(UCase(CStr(sourceSheet.Cells(i, srcTechFileYNCol).Value)))
+        
+        ' Check if this row has an Item ID and Y flag
+        If nextRowItemID <> "" And nextRowYNFlag = "Y" Then
+            nextItemWithY = nextRowItemID
+            nextItemFound = True
             Exit For
         End If
     Next i
+    
+    ' If we found a next item with Y flag, find where it is in Technical File
+    If nextItemFound Then
+        For i = 7 To lastRow
+            Dim tfItemID As String
+            tfItemID = Trim(CStr(targetSheet.Cells(i, tgtItemIDCol).Value))
+            
+            ' Insert before this item
+            If UCase(tfItemID) = UCase(nextItemWithY) Then
+                insertPosition = i
+                Exit For
+            End If
+        Next i
+    End If
+    ' If no next item with Y flag found, insertPosition remains at end (lastRow + 1)
+    ' ========================================
+    ' End of new insert position logic
+    ' ========================================
     
     ' Activate target sheet and select the insert row
     targetSheet.Activate
