@@ -69,6 +69,7 @@ End Sub
 ' Key actions:
 ' - Validate source sheet and row
 ' - Find columns in both sheets
+' - Check for duplicate Item ID in Technical File
 ' - Determine insert position based on Item ID
 ' - Insert row and column using InsertMatrixRowAndColumn
 ' - Copy data from source to target
@@ -77,6 +78,7 @@ End Sub
 ' - Get selected row and validate
 ' - Find column indices in both sheets
 ' - Extract data from source row
+' - Check if Item ID already exists in Technical File (NEW)
 ' - Find insert position in Technical File based on Item ID
 ' - Call InsertMatrixRowAndColumn to insert at correct position
 ' - Copy data to new row
@@ -210,8 +212,45 @@ Sub CopyRowToTechnicalFile()
         Exit Sub
     End If
     
-    ' Find insert position in Technical File based on Item ID ordering
+    ' ========================================
+    ' NEW: Check if Item ID already exists in Technical File
+    ' ========================================
     lastRow = targetSheet.Cells(targetSheet.Rows.Count, tgtItemIDCol).End(xlUp).row
+    
+    Dim duplicateFound As Boolean
+    Dim duplicateRow As Long
+    duplicateFound = False
+    duplicateRow = 0
+    
+    For i = 7 To lastRow ' Assuming row 1-6 is header
+        Dim existingItemID As String
+        existingItemID = Trim(CStr(targetSheet.Cells(i, tgtItemIDCol).Value))
+        
+        ' Check for exact match (case-insensitive)
+        If UCase(existingItemID) = UCase(sourceItemID) Then
+            duplicateFound = True
+            duplicateRow = i
+            Exit For
+        End If
+    Next i
+    
+    ' If duplicate found, inform user and exit
+    If duplicateFound Then
+        MsgBox "Item ID '" & sourceItemID & "' already exists in Technical File at row " & duplicateRow & "." & vbCrLf & vbCrLf & _
+               "Cannot copy duplicate Item IDs to Technical File." & vbCrLf & vbCrLf & _
+               "Please verify if this item needs to be updated or if it's already present.", _
+               vbExclamation, "Duplicate Item ID Found"
+        
+        ' Navigate to the duplicate row in Technical File so user can see it
+        targetSheet.Activate
+        targetSheet.Rows(duplicateRow).Select
+        Exit Sub
+    End If
+    ' ========================================
+    ' End of duplicate check
+    ' ========================================
+    
+    ' Find insert position in Technical File based on Item ID ordering
     insertPosition = lastRow + 1 ' Default to end
     
     For i = 7 To lastRow ' Assuming row 1-6 is header
