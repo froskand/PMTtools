@@ -135,6 +135,7 @@ Sub CopyRowToTechnicalFile()
     ' Find column indices in source sheet (Technical Data)
     Dim srcIdentDateCol As Long, srcLocationCol As Long, srcItemIDCol As Long
     Dim srcAbbrevCol As Long, srcNameCol As Long, srcRespCol As Long, srcVersionCol As Long
+    Dim srcTechFileYNCol As Long
     
     srcIdentDateCol = FindColumn(sourceSheet, "Identified Date")
     srcLocationCol = FindColumn(sourceSheet, "Location")
@@ -143,6 +144,7 @@ Sub CopyRowToTechnicalFile()
     srcNameCol = FindColumn(sourceSheet, "Name")
     srcRespCol = FindColumn(sourceSheet, "Responsible")
     srcVersionCol = FindColumn(sourceSheet, "Version")
+    srcTechFileYNCol = FindColumn(sourceSheet, "Technical File (Y/N)")
     
     ' Validate all columns found
     If srcIdentDateCol = 0 Or srcLocationCol = 0 Or srcItemIDCol = 0 Or _
@@ -150,6 +152,23 @@ Sub CopyRowToTechnicalFile()
         MsgBox "Could not find all required columns in Technical Data sheet." & vbCrLf & _
                "Required: Identified Date, Location, Item ID, Abbreviation, Name, Responsible, Version", _
                vbCritical
+        Exit Sub
+    End If
+    
+    If srcTechFileYNCol = 0 Then
+        MsgBox "Could not find 'Technical File (Y/N)' column in Technical Data sheet.", vbCritical
+        Exit Sub
+    End If
+    
+    ' Check if Technical File (Y/N) column contains Y or y
+    Dim techFileYN As String
+    techFileYN = Trim(UCase(CStr(sourceSheet.Cells(sourceRow, srcTechFileYNCol).Value)))
+    
+    If techFileYN <> "Y" Then
+        MsgBox "Cannot copy to Technical File." & vbCrLf & _
+               "The 'Technical File (Y/N)' column must contain 'Y' or 'y'." & vbCrLf & _
+               "Current value: '" & sourceSheet.Cells(sourceRow, srcTechFileYNCol).Value & "'", _
+               vbExclamation
         Exit Sub
     End If
     
@@ -273,9 +292,9 @@ End Function
 
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
 '     ' Optional: Only show menu on specific sheets
-     If Sh.name = "Technical Data" Then
-         Call AddCopyToTechFileContextMenu
-     Else
-         Call RemoveCopyToTechFileContextMenu
-     End If
+    If Sh.name = "Technical Data" Then
+        Call AddCopyToTechFileContextMenu
+    Else
+        Call RemoveCopyToTechFileContextMenu
+    End If
 End Sub
